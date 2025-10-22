@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  generateName: smithy-kafka-build
+  generateName: smithy-httpd-build
 spec:
   ttlSecondsAfterFinished: 60
   template:
@@ -15,11 +15,12 @@ spec:
       - name: smithy
         image: ghcr.io/rapidfort/smithy:latest
         args:
-          - --context=https://github.com/wurstmeister/kafka-docker.git
+          - --context=https://github.com/docker-library/httpd.git
+          - --context-sub-path=2.4/alpine
           - --dockerfile=Dockerfile
-          - --destination=10.228.96.114:5000/smithy-test:mykafka
+          - --destination=10.228.96.114:5000/my-httpd
+          - --no-push
           - -v
-          - --push-retry=3
         securityContext:
           allowPrivilegeEscalation: true
           capabilities:

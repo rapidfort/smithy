@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  generateName: smithy-kafka-build
+  name: smithy-golang-build
 spec:
   ttlSecondsAfterFinished: 60
   template:
@@ -13,13 +13,13 @@ spec:
         fsGroup: 1000
       containers:
       - name: smithy
-        image: ghcr.io/rapidfort/smithy:latest
+        image: ghcr.io/rapidfort/smithy:1.0.10
         args:
-          - --context=https://github.com/wurstmeister/kafka-docker.git
+          - --context=https://github.com/docker-library/golang.git
+          - --context-sub-path=1.24/trixie
           - --dockerfile=Dockerfile
-          - --destination=10.228.96.114:5000/smithy-test:mykafka
+          - --destination=10.228.96.114:5000/my-golang
           - -v
-          - --push-retry=3
         securityContext:
           allowPrivilegeEscalation: true
           capabilities:

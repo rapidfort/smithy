@@ -1,9 +1,7 @@
 #!/bin/bash
 docker login
 docker run --rm --cap-drop ALL --cap-add SETUID --cap-add SETGID --security-opt seccomp=unconfined --security-opt apparmor=unconfined ghcr.io/rapidfort/smithy:1.0.10 \
-  --context=https://github.com/docker-library/python.git \
-  --context-sub-path=3.14/alpine3.22 \
-  --dockerfile=Dockerfile \
-  --destination=python \
-  --no-push \
-  -v
+  --context=https://github.com/vllm-project/vllm.git \
+  --dockerfile=docker/Dockerfile \
+  --destination=10.228.96.114:5000/my-vllm \
+  --no-push

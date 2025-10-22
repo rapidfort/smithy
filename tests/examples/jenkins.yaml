@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  generateName: smithy-kafka-build
+  generateName: smithy-jenkins-build
 spec:
   ttlSecondsAfterFinished: 60
   template:
@@ -15,11 +15,12 @@ spec:
       - name: smithy
         image: ghcr.io/rapidfort/smithy:latest
         args:
-          - --context=https://github.com/wurstmeister/kafka-docker.git
-          - --dockerfile=Dockerfile
-          - --destination=10.228.96.114:5000/smithy-test:mykafka
+          - --context=https://github.com/jenkinsci/docker.git
+#          - --context-sub-path=debian/trixie/hotspot
+          - --dockerfile=debian/trixie/hotspot/Dockerfile
+          - --destination=jenkins
+          - --no-push
           - -v
-          - --push-retry=3
         securityContext:
           allowPrivilegeEscalation: true
           capabilities:
