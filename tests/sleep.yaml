@@ -18,5 +18,6 @@ spec:
           allowPrivilegeEscalation: true
           capabilities:
             drop: [ALL]
+            #add: [SETUID, SETGID, SYS_ADMIN]
             add: [SETUID, SETGID]
 

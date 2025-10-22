@@ -51,4 +51,8 @@ type Config struct {
 	// Enterprise features (will error in OSS)
 	Scan   bool
 	Harden bool
+
+	// Instrumentation options
+	EnableInstrumentation    bool
+	InstrumentationOutputDir string
 }

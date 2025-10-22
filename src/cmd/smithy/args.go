@@ -253,6 +253,18 @@ func parseArgs(args []string) *Config {
 		case "--harden":
 			config.Harden = true
 
+		// Instrumentation flags
+		case "--enable-instrumentation":
+			config.EnableInstrumentation = true
+
+		case "--instrumentation-output-dir":
+			if value != "" {
+				config.InstrumentationOutputDir = value
+			} else if i+1 < len(args) {
+				i++
+				config.InstrumentationOutputDir = args[i]
+			}
+
 		default:
 			if !strings.HasPrefix(arg, "-") {
 				logger.Warning("Unexpected argument: %s", arg)

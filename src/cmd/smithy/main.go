@@ -13,6 +13,12 @@ import (
 )
 
 func main() {
+	// Handle internal hook commands (called by OCI runtime)
+	if len(os.Args) > 1 && strings.HasPrefix(os.Args[1], "__internal_hook_") {
+		handleInternalHook()
+		return
+	}
+
 	// Handle version flag
 	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "-version" || os.Args[1] == "version") {
 		printVersion()
@@ -35,7 +41,7 @@ func main() {
 	config := parseArgs(os.Args[1:])
 
 	// Log smithy version
-	logger.Info("Smithy – Kubernetes-Native OCI Image Builder v%s", Version)
+	logger.Info("Smithy â€“ Kubernetes-Native OCI Image Builder v%s", Version)
 	logger.Debug("Build Date: %s, Commit: %s, Branch: %s", BuildDate, CommitSHA, Branch)
 
 	// Validate storage driver
@@ -168,6 +174,8 @@ func main() {
 		DigestFile:                 config.DigestFile,
 		ImageNameWithDigestFile:    config.ImageNameWithDigestFile,
 		ImageNameTagWithDigestFile: config.ImageNameTagWithDigestFile,
+		EnableInstrumentation:      config.EnableInstrumentation,
+		InstrumentationOutputDir:   config.InstrumentationOutputDir,
 	}
 
 	if err := build.Execute(buildConfig, ctx, authFile); err != nil {
@@ -191,4 +199,37 @@ func main() {
 	}
 
 	logger.Info("Build operation completed successfully!")
+}
+
+// handleInternalHook handles internal hook commands called by OCI runtime
+func handleInternalHook() {
+	if len(os.Args) < 2 {
+		logger.Fatal("No hook command specified")
+	}
+
+	command := os.Args[1]
+	
+	// Parse flags
+	var outputDir string
+	for i := 2; i < len(os.Args); i++ {
+		if os.Args[i] == "--output-dir" && i+1 < len(os.Args) {
+			outputDir = os.Args[i+1]
+			i++
+		}
+	}
+
+	var err error
+	switch command {
+	case "__internal_hook_prestart":
+		err = build.HandlePrestartHook(outputDir)
+	case "__internal_hook_poststop":
+		err = build.HandlePoststopHook(outputDir)
+	default:
+		logger.Fatal("Unknown internal hook command: %s", command)
+	}
+
+	if err != nil {
+		// Log but don't fail - hooks should not break builds
+		logger.Warning("Hook %s failed: %v", command, err)
+	}
 }

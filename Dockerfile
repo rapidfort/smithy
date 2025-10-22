@@ -35,6 +35,30 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
         -X main.Branch=${BRANCH}" \
     -o smithy ./cmd/smithy
 
+# Stage 2: Build static strace for instrumentation
+FROM alpine AS strace-builder
+
+RUN apk add --no-cache \
+    build-base \
+    linux-headers \
+    git \
+    autoconf \
+    automake \
+    gawk \
+    coreutils
+
+WORKDIR /build
+
+# Clone and build static strace (without --depth to avoid detached HEAD issues)
+RUN git clone https://github.com/strace/strace.git && \
+    cd strace && \
+    ./bootstrap && \
+    export LDFLAGS='-static -pthread' && \
+    ./configure --disable-mpers && \
+    make -j$(nproc) && \
+    strip src/strace && \
+    cp src/strace /build/strace
+
 # Build running image binary
 FROM alpine AS run-prep-image
 ARG SMITHY_UID
@@ -70,6 +94,10 @@ RUN apk add --no-cache \
 # Copy smithy binary
 COPY --from=smithy-builder /app/smithy /usr/local/bin/smithy
 RUN chmod +x /usr/local/bin/smithy
+
+# Copy static strace binary for instrumentation
+COPY --from=strace-builder /build/strace/src/strace /usr/local/bin/strace
+RUN chmod +x /usr/local/bin/strace
 
 # Create smithy user
 RUN addgroup -g ${SMITHY_UID} ${SMITHY_USER} && \

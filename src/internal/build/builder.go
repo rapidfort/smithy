@@ -45,6 +45,10 @@ type Config struct {
 	DigestFile                 string
 	ImageNameWithDigestFile    string
 	ImageNameTagWithDigestFile string
+
+	// Instrumentation options
+	EnableInstrumentation bool
+	InstrumentationOutputDir string
 }
 
 // Execute executes a buildah build with authentication
@@ -61,6 +65,32 @@ func Execute(config Config, ctx *Context, authFile string) error {
 
 	logger.Info("Starting buildah build...")
 
+	// Setup instrumentation hooks if enabled
+	var hooksDir string
+	var err error
+	if config.EnableInstrumentation {
+		logger.Info("Enabling build instrumentation with strace")
+		
+		outputDir := config.InstrumentationOutputDir
+		if outputDir == "" {
+			outputDir = filepath.Join(os.TempDir(), "smithy-strace-logs")
+		}
+		
+		hooksConfig := HooksConfig{
+			Enabled:   true,
+			OutputDir: outputDir,
+		}
+		
+		hooksDir, err = SetupInstrumentationHooks(hooksConfig)
+		if err != nil {
+			logger.Warning("Failed to setup instrumentation hooks: %v", err)
+			logger.Warning("Continuing without instrumentation")
+			hooksDir = "" // Clear it so we don't try to use it
+		} else {
+			logger.Info("Hooks configured at: %s", hooksDir)
+		}
+	}
+
 	// Construct buildah command
 	args := []string{"bud"}
 
@@ -72,6 +102,12 @@ func Execute(config Config, ctx *Context, authFile string) error {
 		} else {
 			args = append(args, "--authfile", authFile)
 		}
+	}
+
+	// Add hooks directory if instrumentation is enabled
+	if hooksDir != "" {
+		args = append(args, "--hooks-dir", hooksDir)
+		logger.Info("Added --hooks-dir=%s to buildah command", hooksDir)
 	}
 
 	// Add Dockerfile
@@ -129,6 +165,13 @@ func Execute(config Config, ctx *Context, authFile string) error {
 		args = append(args, "--tls-verify=false")
 	}
 
+	// Add network mode for instrumentation (needed for OCI isolation)
+	if config.EnableInstrumentation {
+		args = append(args, "--network=host")
+		args = append(args, "--pid=host")
+		logger.Debug("Using --network=host and --pid=host for instrumentation compatibility")
+	}
+
 	// Add tags (destinations)
 	for _, dest := range config.Destination {
 		args = append(args, "-t", dest)
@@ -138,7 +181,7 @@ func Execute(config Config, ctx *Context, authFile string) error {
 	args = append(args, ctx.Path)
 
 	// Log the command
-	logger.Debug("Buildah command: buildah %s", strings.Join(args, " "))
+	logger.Info("Buildah command: buildah %s", strings.Join(args, " "))
 
 	// Execute buildah
 	cmd := exec.Command("buildah", args...)
@@ -147,16 +190,25 @@ func Execute(config Config, ctx *Context, authFile string) error {
 	cmd.Env = os.Environ()
 
 	// =========================================================================
-	// CRITICAL: Always use chroot isolation for both root and rootless
+	// CRITICAL: Use OCI isolation with host namespaces for instrumentation
 	// =========================================================================
-	// chroot isolation works for both modes and is more reliable in containers
-	// Override only if explicitly set via environment variable
+	// Hooks only work with OCI isolation, not chroot
+	// We need --network=host and --pid=host to avoid /proc/sys read-only issues
 	// =========================================================================
-	if os.Getenv("BUILDAH_ISOLATION") == "" {
-		cmd.Env = append(cmd.Env, "BUILDAH_ISOLATION=chroot")
-		logger.Debug("Set BUILDAH_ISOLATION=chroot (default for all modes)")
+	if config.EnableInstrumentation {
+		if os.Getenv("BUILDAH_ISOLATION") == "" {
+			cmd.Env = append(cmd.Env, "BUILDAH_ISOLATION=oci")
+			logger.Info("Set BUILDAH_ISOLATION=oci (required for instrumentation hooks)")
+		} else {
+			logger.Info("Using existing BUILDAH_ISOLATION=%s", os.Getenv("BUILDAH_ISOLATION"))
+		}
 	} else {
-		logger.Debug("Using existing BUILDAH_ISOLATION=%s", os.Getenv("BUILDAH_ISOLATION"))
+		if os.Getenv("BUILDAH_ISOLATION") == "" {
+			cmd.Env = append(cmd.Env, "BUILDAH_ISOLATION=chroot")
+			logger.Debug("Set BUILDAH_ISOLATION=chroot (default for all modes)")
+		} else {
+			logger.Debug("Using existing BUILDAH_ISOLATION=%s", os.Getenv("BUILDAH_ISOLATION"))
+		}
 	}
 	// Enhanced environment setup for auth
 	if authFile != "" {
@@ -212,6 +264,20 @@ func Execute(config Config, ctx *Context, authFile string) error {
 
 	logger.Info("Build completed successfully")
 
+	// Parse instrumentation logs if enabled
+	if config.EnableInstrumentation && config.InstrumentationOutputDir != "" {
+		logger.Info("Parsing instrumentation logs...")
+		deps, err := ParseStraceLogs(config.InstrumentationOutputDir)
+		if err != nil {
+			logger.Warning("Failed to parse strace logs: %v", err)
+		} else if len(deps) > 0 {
+			logger.Info("Found %d network dependencies", len(deps))
+			// TODO: Generate attestation document
+		} else {
+			logger.Info("No network dependencies detected")
+		}
+	}
+
 	// Handle special output options
 	if config.TarPath != "" {
 		if err := exportToTar(config); err != nil {
@@ -223,6 +289,13 @@ func Execute(config Config, ctx *Context, authFile string) error {
 		if err := saveDigestInfo(config); err != nil {
 			return fmt.Errorf("failed to save digest info: %v", err)
 		}
+	}
+
+	// Cleanup hooks directory if it was created
+	// TODO: Re-enable cleanup after debugging
+	if config.EnableInstrumentation && hooksDir != "" {
+		logger.Info("Hooks directory kept for debugging: %s", hooksDir)
+		// CleanupHooks(hooksDir)
 	}
 
 	return nil
