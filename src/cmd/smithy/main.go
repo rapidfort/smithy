@@ -143,6 +143,7 @@ func main() {
 		ImageNameWithDigestFile:    config.ImageNameWithDigestFile,
 		ImageNameTagWithDigestFile: config.ImageNameTagWithDigestFile,
 		Reproducible:               config.Reproducible,
+		Verbosity:                  config.Verbosity,
 	}
 
 	if err := build.Execute(buildConfig, ctx, authFile); err != nil {

@@ -46,6 +46,9 @@ type Config struct {
 
 	// Reproducible builds
 	Reproducible bool
+
+	// Logging
+	Verbosity string
 }
 
 // Execute executes a buildah build with authentication
@@ -130,6 +133,11 @@ func Execute(config Config, ctx *Context, authFile string) error {
 	// Add tags (destinations)
 	for _, dest := range config.Destination {
 		args = append(args, "-t", dest)
+	}
+
+	// Add log level (verbosity)
+	if config.Verbosity != "" {
+		args = append(args, fmt.Sprintf("--log-level=%s", config.Verbosity))
 	}
 
 	// Add context path
