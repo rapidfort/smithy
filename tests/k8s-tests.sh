@@ -309,8 +309,7 @@ ensure_cosign_key() {
     
     # CRITICAL: Fix ownership so any user can access the keys
     # This is important because the program can be run by any user
-    chown -R $(id -u):$(id -g) "${key_dir}" 2>/dev/null || true
-    chmod -R 755 "${key_dir}" 2>/dev/null || true
+    chown -R 1000:1000 "${key_dir}" 2>/dev/null || true
     
     if [ -f "${key_file}" ] && [ -f "${pub_file}" ]; then
         echo -e "${GREEN}✓ Cosign key pair generated successfully${NC}"
